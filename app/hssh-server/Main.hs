@@ -29,22 +29,13 @@ import qualified Network.SSH.Server            as Server
 
 main :: IO ()
 main = do
-    file                <- BS.readFile "./resources/id_ed25519"
-    (privateKey, _) : _ <- decodePrivateKeyFile BS.empty file :: IO [(KeyPair, BA.Bytes)]
-    sb <- Server.newSwitchboard
-    _ <- async (foo sb)
-    Server.runServer (config sb) privateKey
+    _ <- putStrLn "start"
+    keyPair <- newKeyPair
+    _ <- putStrLn "before runServer"
+    Server.runServer (config) keyPair
   where
-    foo sb = forever do
-        threadDelay 10000000
-        print "NOW"
-        a <- async $ Server.connect sb "FIXME" (Address "localhost" 22) (Address "127.0.0.1" 1234) $ Server.StreamHandler $ \s -> do
-            threadDelay 10000
-            pure ()
-        waitCatch a >>= print 
-        
-    config sb = def
-        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "*" 22)}
+    config = def
+        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "*" 2024)}
         , Server.transportConfig          = def {
                 onSend = \x -> putStrLn ("CLIENT: " ++ show x),
                 onReceive = \x -> putStrLn ("SERVER: " ++ show x)
@@ -55,7 +46,6 @@ main = do
         , Server.connectionConfig         = def
             { Server.onSessionRequest     = handleSessionRequest
             , Server.onDirectTcpIpRequest = handleDirectTcpIpRequest
-            , Server.switchboard          = Just sb
             }
         , Server.onConnect                = \ha -> do
             print ha
@@ -78,6 +68,20 @@ handleDirectTcpIpRequest state user src dst = pure $ Just $ Server.DirectTcpIpHa
     print bs
 
 handleSessionRequest :: state -> user -> IO (Maybe Server.SessionHandler)
-handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ \_ _ _ _ stdout _ -> do
-    sendAll stdout "Hello world!\n"
-    pure ExitSuccess
+handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ mySessionHandler state user
+   
+
+mySessionHandler :: (InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
+mySessionHandler state user a b c stdin stdout d = do
+    s <- receive stdin 10
+    if s == BS.empty
+      then pure ExitSuccess
+    else do
+      sendAll stdout "Hello world!\n"
+      sendAll stdout s
+      sendAll stdout s
+      mySessionHandler state user a b c stdin stdout d
+
+ 
+
+
