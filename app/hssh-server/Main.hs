@@ -15,6 +15,7 @@ import           Control.Monad                  ( forever
                                                 )
 import qualified Data.ByteArray                as BA
 import qualified Data.ByteString               as BS
+--import Data.ByteString.Lazy.Char8              as BSLC hiding (putStrLn)
 import           Data.Default
 import           System.Exit
 
@@ -26,6 +27,8 @@ import qualified System.Socket.Unsafe           as S
 
 import           Network.SSH
 import qualified Network.SSH.Server            as Server
+import           Data.Text                     as T
+import           Data.Text.Encoding            as TE
 
 main :: IO ()
 main = do
@@ -67,21 +70,14 @@ handleDirectTcpIpRequest state user src dst = pure $ Just $ Server.DirectTcpIpHa
     sendAll stream bs
     print bs
 
-handleSessionRequest :: state -> user -> IO (Maybe Server.SessionHandler)
+handleSessionRequest :: (Show state, Show user) => state -> user -> IO (Maybe Server.SessionHandler)
 handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ mySessionHandler state user
    
-
-mySessionHandler :: (InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
+mySessionHandler :: (Show state, Show user, InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
 mySessionHandler state user a b c stdin stdout d = do
-    s <- receive stdin 10
-    if s == BS.empty
-      then pure ExitSuccess
-    else do
-      sendAll stdout "Hello world!\n"
-      sendAll stdout s
-      sendAll stdout s
-      mySessionHandler state user a b c stdin stdout d
+    s <- receive stdin 1024
+    sendAll stdout $ TE.encodeUtf8 $ T.append (TE.decodeUtf8 s) (T.pack "\n")
+    mySessionHandler state user a b c stdin stdout d
 
- 
 
 
