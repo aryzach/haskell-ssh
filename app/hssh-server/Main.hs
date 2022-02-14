@@ -3,6 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Debug.Trace
+
 import           Control.Concurrent             ( threadDelay )
 import           Control.Concurrent.Async
 import           Control.Exception              ( bracket
@@ -15,7 +17,7 @@ import           Control.Monad                  ( forever
                                                 )
 import qualified Data.ByteArray                as BA
 import qualified Data.ByteString               as BS
---import Data.ByteString.Lazy.Char8              as BSLC hiding (putStrLn)
+import           Data.ByteString.Char8         as C8 hiding (putStrLn, unsnoc, snoc, map, filter)
 import           Data.Default
 import           System.Exit
 
@@ -27,7 +29,7 @@ import qualified System.Socket.Unsafe           as S
 
 import           Network.SSH
 import qualified Network.SSH.Server            as Server
-import           Data.Text                     as T
+import           Data.Text                     as T hiding (map, filter)
 import           Data.Text.Encoding            as TE
 
 main :: IO ()
@@ -50,14 +52,8 @@ main = do
             { Server.onSessionRequest     = handleSessionRequest
             , Server.onDirectTcpIpRequest = handleDirectTcpIpRequest
             }
-        , Server.onConnect                = \ha -> do
-            print ha
+        , Server.onConnect                = \_ -> do
             pure (Just ())
-        , Server.onDisconnect             = \ha st user d -> do
-            print ha
-            print st
-            print user
-            print d
         }
 
 handleDirectTcpIpRequest :: state -> user -> SourceAddress -> DestinationAddress -> IO (Maybe Server.DirectTcpIpHandler)
@@ -71,13 +67,69 @@ handleDirectTcpIpRequest state user src dst = pure $ Just $ Server.DirectTcpIpHa
     print bs
 
 handleSessionRequest :: (Show state, Show user) => state -> user -> IO (Maybe Server.SessionHandler)
-handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ mySessionHandler state user
+handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ mySessionHandler state user BS.empty
    
-mySessionHandler :: (Show state, Show user, InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
-mySessionHandler state user a b c stdin stdout d = do
-    s <- receive stdin 1024
-    sendAll stdout $ TE.encodeUtf8 $ T.append (TE.decodeUtf8 s) (T.pack "\n")
-    mySessionHandler state user a b c stdin stdout d
+mySessionHandler :: (Show state, Show user, InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> BS.ByteString -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
+mySessionHandler state user previousCommandBytes a b c stdin stdout d = do
+    p <- receive stdin 1024
+    let currentCommandBytes = (BS.append previousCommandBytes p)
+    sendAll stdout p
+    if lastIsCarriageReturn $ TE.decodeUtf8 p
+      then do
+        sendAll stdout $ C8.pack . createResponseFromCommand . C8.unpack $ currentCommandBytes
+        mySessionHandler state user BS.empty a b c stdin stdout d 
+      else do
+        mySessionHandler state user currentCommandBytes a b c stdin stdout d 
 
+lastIsCarriageReturn :: T.Text -> Bool
+lastIsCarriageReturn t = case unsnoc t of
+  Just (_,l) -> l == '\r'
+  Nothing -> False
 
+handleBSCommand :: BS.ByteString -> BS.ByteString
+handleBSCommand bs = bs
 
+createResponseFromCommand :: String -> String
+createResponseFromCommand text = Prelude.concat $
+  [ 
+    "\n"
+  , "\r"
+  , createResponseContent $ text
+  , "\n"
+  , "\r"
+  ]
+
+createResponseContent :: String -> String
+createResponseContent userCommand = case isUserCommand (stripAll userCommand) of
+  Just LS -> "Documents Projects Desktop"
+  Just CD -> "new dir"
+  Nothing -> "bad command"
+
+data UserCommand = LS | CD
+
+isUserCommand :: String -> Maybe UserCommand
+isUserCommand "ls" = Just LS
+isUserCommand "cd" = Just CD
+isUserCommand _    = Nothing
+
+stripAll :: String -> String
+stripAll s = filter (\char -> char /= '\n' && char /= '\r') s
+
+{- TODO
+ - ctrl-C to exit
+ - strip whitespace before command
+ - add '#' or whatever before user types
+ - make game
+ - figure out how to allow the play the game from the ssh session
+ -}
+
+--createResponseContent :: T.Text -> T.Text
+--createResponseContent text = T.pack $ 
+     
+
+-- T.pack :: String -> Text
+-- T.unpack :: Text -> String
+-- C8.pack :: String -> ByteString
+-- C8.unpack :: ByteString -> String
+-- TE.encodeUtf8 :: Text -> ByteString
+-- TE.decodeUtf8 :: ByteString -> Text
