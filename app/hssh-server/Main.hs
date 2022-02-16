@@ -40,7 +40,7 @@ main = do
     Server.runServer (config) keyPair
   where
     config = def
-        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "*" 2024)}
+        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "*" 2023)}
         , Server.transportConfig          = def {
                 onSend = \x -> putStrLn ("CLIENT: " ++ show x),
                 onReceive = \x -> putStrLn ("SERVER: " ++ show x)
