@@ -4,5 +4,4 @@
 *.hp
 *.prof
 *.svg
-*.cabal
 *.lock

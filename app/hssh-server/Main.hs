@@ -40,7 +40,7 @@ main = do
     Server.runServer (config) keyPair
   where
     config = def
-        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "*" 2023)}
+        { Server.socketConfig             = def { Server.socketBindAddresses = pure (Address "172.31.14.100" 2023)}
         , Server.transportConfig          = def {
                 onSend = \x -> putStrLn ("CLIENT: " ++ show x),
                 onReceive = \x -> putStrLn ("SERVER: " ++ show x)
@@ -66,10 +66,10 @@ handleDirectTcpIpRequest state user src dst = pure $ Just $ Server.DirectTcpIpHa
     sendAll stream bs
     print bs
 
-handleSessionRequest :: (Show state, Show user) => state -> user -> IO (Maybe Server.SessionHandler)
+handleSessionRequest :: (Show user) => state -> user -> IO (Maybe Server.SessionHandler)
 handleSessionRequest state user = pure $ Just $ Server.SessionHandler $ mySessionHandler state user BS.empty
    
-mySessionHandler :: (Show state, Show user, InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> BS.ByteString -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
+mySessionHandler :: (Show user, InputStream stdin, OutputStream stdout, OutputStream stderr) => state -> user -> BS.ByteString -> Environment -> Maybe TermInfo -> Maybe Command -> stdin -> stdout -> stderr -> IO ExitCode     
 mySessionHandler state user previousCommandBytes a b c stdin stdout d = do
     p <- receive stdin 1024
     let currentCommandBytes = (BS.append previousCommandBytes p)
