@@ -31,7 +31,7 @@ runGet bs = case G.runGet get bs of
     Right a -> pure a
 {-# INLINEABLE runGet #-}
 
-runGetter :: Monad m => BS.ByteString -> Get a -> m a
+runGetter :: (MonadFail m, Monad m) => BS.ByteString -> Get a -> m a
 runGetter bs getter = case G.runGet getter bs of
     Left  e -> fail e
     Right a -> pure a
